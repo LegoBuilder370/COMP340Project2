@@ -6,6 +6,7 @@
  #include <semaphore.h>  
  #include <stdlib.h>
  #include <unistd.h>
+ #include <stdio.h>
  
  // the number of philosophers
  #define NUMBER 5
@@ -51,6 +52,30 @@
 
 int main(int argc, char const *argv[])
 {
+    rand_position = 0;
+
+    // Read file into array
+    FILE *myFile;
+    myFile = fopen(argv[1], "r");
+
+
+    if (myFile == NULL){
+        printf("Error Reading File\n");
+        exit (0);
+    }
+
+    for (int i = 0; i < MAX_LENGTH; i++){
+        fscanf(myFile, "%d,", &rand_numbers[i] );
+    }
+
+    for (int i = 0; i < MAX_LENGTH; i++){
+        printf("Number is: %d\n\n", rand_numbers[i]);
+    }
+
+    fclose(myFile);
+
+    printf("Array made\n");
+    
     pthread_mutex_init(&mutex_lock, NULL);
 
     //set up semaphores
@@ -61,6 +86,8 @@ int main(int argc, char const *argv[])
         sem_vars[NUMBER] = mutex;
     }
 
+    printf("set up semaphores\n");
+
     pthread_t tid[NUMBER];
     for (size_t i = 0; i < NUMBER; i++)
     {
@@ -68,10 +95,15 @@ int main(int argc, char const *argv[])
         pthread_create(&tid[i], NULL, philosopher, &(thread_id[i]));
     }
 
+    printf("Created threads\n");
+
     for (size_t i = 0; i < NUMBER; i++)
     {
+        printf("Joining threads\n");
         pthread_join(tid[i], NULL);
     }
+
+    printf("Joined threads\n");
 
     // delete semaphores
     for (size_t i = 0; i < NUMBER; i++)
@@ -79,20 +111,27 @@ int main(int argc, char const *argv[])
         sem_destroy(&sem_vars[NUMBER]);
     }
 
+    printf("Destroyed semaphores\n");
+
     pthread_mutex_destroy(&mutex_lock);
+
+    printf("Destroyed mutex\n");
 
     return 0;
 }
 
 void *philosopher(void *param) {
+    printf("Entered philosopher\n");
     int threadNum = (*(int*)param);
     int bitesTaken = 0;
     state[threadNum] = THINKING;
 
     while (bitesTaken < 5) {
         sleep(get_next_number());
+        // sleep(10);
         pickup_chopsticks(threadNum);
         sleep(get_next_number());
+        // sleep(10);
         return_chopsticks(threadNum);
         bitesTaken++; 
     }
@@ -122,4 +161,8 @@ void test(int i){
         state[i] = EATING; // phi[i] can eat
         sem_post(&sem_vars[i]); // wake up phi[i] if it is blocked
     }    
+}
+
+int get_next_number() {
+    return rand_numbers[rand_position++];
 }
