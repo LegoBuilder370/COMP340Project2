@@ -8,8 +8,7 @@
  #include <unistd.h>
  #include <math.h>
  #include <stdio.h>
- #include <stdio.h>
-#include <sys/time.h>
+ #include <sys/time.h>
  
  // the number of philosophers
  #define NUMBER 5
@@ -34,6 +33,10 @@
  
  // the state of each philosopher (THINKING, HUNGRY, EATING)
  enum {THINKING, HUNGRY, EATING} state[NUMBER];
+
+ // the state of the center chopstick
+ int centerChopstick;
+ int chopstick[NUMBER];
  
  // the id of each philosopher (0 .. NUMBER - 1)
  int thread_id[NUMBER];
@@ -41,6 +44,9 @@
  // semaphore variables and associated mutex lock
  sem_t sem_vars[NUMBER];
  pthread_mutex_t mutexlock;
+
+ // chopstick locks
+ pthread_mutex_t chopLocks[NUMBER];
  
  //function that simulates the philosopher operation
  void *philosopher(void *param);
@@ -67,30 +73,27 @@ double timeSums = 0;
 int numberOfWaitTimes = 0;
 
 
-
 int main(int argc, char const *argv[])
 {
 
-     // Read file into array
-     FILE *myFile;
-     myFile = fopen(argv[1], "r");
-   
-     if (myFile == NULL){
-         printf("Error Reading File\n");
-         exit (0);
-     }
-  
-    //  for (int i = 0; i < MAX_LENGTH; i++){
-    //      fscanf(myFile, "%d,", &rand_numbers[i] );
-    //  }
-  
-    //  for (int i = 0; i < MAX_LENGTH; i++){
-    //      printf("Number is: %d\n\n", rand_numbers[i]);
-    //  }
-  
-     fclose(myFile);
-  
-    //  printf("Array made\n");
+    // Read file into array
+    FILE *myFile;
+    myFile = fopen(argv[1], "r");
+    
+    if (myFile == NULL){
+        printf("Error Reading File\n");
+        exit (0);
+    }
+
+    // for (int i = 0; i < MAX_LENGTH; i++){
+    //     fscanf(myFile, "%d,", &rand_numbers[i] );
+    // }
+
+    // for (int i = 0; i < MAX_LENGTH; i++){
+    //     printf("Number is: %d\n\n", rand_numbers[i]);
+    // }
+
+    fclose(myFile);
 
     for(int run = 0; run < 5; run++) {
 
@@ -107,6 +110,13 @@ int main(int argc, char const *argv[])
         {
             state[i] = THINKING;
         }
+
+        // set up chopsticks
+        for (size_t i = 0; i < NUMBER; i++)
+        {
+            chopstick[i] = -1;
+        }
+        centerChopstick = -1;
 
         //set up semaphores
         sem_init(sem_vars, 0, 1);
@@ -128,6 +138,7 @@ int main(int argc, char const *argv[])
         {
             sem_destroy(&sem_vars[NUMBER]);
         }
+
         pthread_mutex_destroy(&mutex_rand);
         pthread_mutex_destroy(&mutexlock);
 
@@ -138,7 +149,7 @@ int main(int argc, char const *argv[])
     for(int i = 0; i < 5; i++) {
         printf("Average time: %f, Max Time: %f\n", avgWaitTimes[i], maxWaitTimes[i]);
     }
-    
+
     return 0;
 }
 
@@ -146,17 +157,17 @@ void *philosopher(void *param) {
     int threadNum = (*(int*)param);
     int bitesTaken = 0;
 
-    printf("Philosopher %d is starting\n", threadNum);
+    // printf("Philosipher %d is starting\n", threadNum);
 
     while (bitesTaken < 5) {
         sleep(get_next_number());
         // printf("Philosopher %d is done sleeping\n", threadNum);
         pickup_chopsticks(threadNum);
-        // printf("Philosopher %d is currently eating with chopsticks %d and %d\n", threadNum, threadNum, (threadNum+1) % NUMBER);
+        
         sleep(get_next_number());
         return_chopsticks(threadNum);
         bitesTaken++;
-        // printf("Philosopher %d has returned chopsticks %d and %d and taken bite %d\n", threadNum, threadNum, (threadNum+1) % NUMBER, bitesTaken);
+        // printf("Philosopher %d has taken bite %d\n", threadNum, bitesTaken);
     }
 
     pthread_exit(0);
@@ -168,22 +179,21 @@ void pickup_chopsticks(int i) {
     while (hasChopsticks == 0) {
     pthread_mutex_lock(&mutexlock);
     //printf("%d has the lock\n", i);
-
     state[i] = HUNGRY;
 
-    // start timer
-    gettimeofday(&before, NULL);
+     // start timer
+     gettimeofday(&before, NULL);
 
     //hasChopsticks = test(i); // test self
 
-    if(state[(i+NUMBER-1)%NUMBER] != EATING && state[(i+1)%NUMBER] != EATING) {
+    if (chopstick[i] == -1 && chopstick[(i+1)%NUMBER] == -1) {
         state[i] = EATING; // phi[i] can eat
 
         // Stop timer
         gettimeofday(&after, NULL);
 
         waitTime = (double)(after.tv_sec-before.tv_sec)*1000 + (double)(after.tv_usec-before.tv_usec)/1000.0;
-        
+
         // Update values
         numberOfWaitTimes += 1;
         timeSums += waitTime;
@@ -192,11 +202,67 @@ void pickup_chopsticks(int i) {
             maxWaitTime = waitTime;
         }
 
+
+        chopstick[i] = i;
+        chopstick[(i+1)%NUMBER] = i;
+
+        // printf("Philosopher %d is currently eating with chopsticks %d and %d\n", i, i, (i+1) % NUMBER);
+
+        hasChopsticks = 1;
+        pthread_mutex_unlock(&mutexlock);
+    }
+    else if (chopstick[i] == -1 && centerChopstick == -1) {
+        state[i] = EATING;
+
+        // Stop timer
+        gettimeofday(&after, NULL);
+
+        waitTime = (double)(after.tv_sec-before.tv_sec)*1000 + (double)(after.tv_usec-before.tv_usec)/1000.0;
+
+        // Update values
+        numberOfWaitTimes += 1;
+        timeSums += waitTime;
+
+        if(waitTime > maxWaitTime) {
+            maxWaitTime = waitTime;
+        }
+
+
+        chopstick[i] = i;
+        centerChopstick = i;
+
+        // printf("Philosopher %d is currently eating with chopstick %d and C\n", i, i);
+
+        hasChopsticks = 1;
+        pthread_mutex_unlock(&mutexlock);
+    }
+    else if (state[(i+1)%NUMBER] == -1 && centerChopstick == -1) {
+        state[i] = EATING;
+
+        // Stop timer
+        gettimeofday(&after, NULL);
+
+        waitTime = (double)(after.tv_sec-before.tv_sec)*1000 + (double)(after.tv_usec-before.tv_usec)/1000.0;
+
+        // Update values
+        numberOfWaitTimes += 1;
+        timeSums += waitTime;
+
+        if(waitTime > maxWaitTime) {
+            maxWaitTime = waitTime;
+        }
+
+
+        chopstick[(i+1)%NUMBER] = i;
+        centerChopstick = i;
+
+        // printf("Philosopher %d is currently eating with chopstick %d and C\n", i, (i+1) % NUMBER);
+
         hasChopsticks = 1;
         pthread_mutex_unlock(&mutexlock);
     }
     else {
-        // printf("Philosopher %d is waiting for chopsticks %d and %d\n", i, i, (i+1) % NUMBER);
+        // printf("Philosopher %d is waiting for chopsticks\n", i);
         pthread_mutex_unlock(&mutexlock);
         sem_wait(&sem_vars[i]);
     }
@@ -207,8 +273,32 @@ void return_chopsticks(int i) {
     pthread_mutex_lock(&mutexlock);
     //printf("%d has the lock\n", i);
     state[i] = THINKING;
-    sem_post(&sem_vars[(i+NUMBER-1) % NUMBER]);
-    sem_post(&sem_vars[(i+1) % NUMBER]);
+
+    if (chopstick[i] == i) {
+        chopstick[i] = -1;
+
+        // printf("Philosopher %d has returned chopstick %d\n", i, i);
+
+        sem_post(&sem_vars[(i+NUMBER-1) % NUMBER]);
+    }
+    if (chopstick[(i+1)%NUMBER] == i) {
+        chopstick[(i+1)%NUMBER] = -1;
+
+        // printf("Philosopher %d has returned chopstick %d\n", i, (i+1)%NUMBER);
+
+        sem_post(&sem_vars[(i+1) % NUMBER]);
+    }
+    if (centerChopstick == i) {
+        centerChopstick = -1;
+
+        // printf("Philosopher %d has returned chopstick C\n", i);
+
+        for (size_t i = 0; i < NUMBER; i++)
+        {
+            sem_post(&sem_vars[i]);
+        }
+        
+    }
 
     pthread_mutex_unlock(&mutexlock);
     //printf("%d released the lock\n", i);
@@ -229,6 +319,7 @@ void test(int i){
 // int get_next_number() {
 //     return rand_numbers[rand_position++];
 // }
+
 
 int get_next_number() {
 
