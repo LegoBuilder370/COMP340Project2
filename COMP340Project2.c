@@ -73,10 +73,9 @@ int main(int argc, char const *argv[])
     }
 
     fclose(myFile);
-
-    printf("Array made\n");
     
     pthread_mutex_init(&mutex_lock, NULL);
+    pthread_mutex_init(&mutex_rand, NULL);
 
     //set up semaphores
     for (size_t i = 0; i < NUMBER; i++)
@@ -86,8 +85,6 @@ int main(int argc, char const *argv[])
         sem_vars[NUMBER] = mutex;
     }
 
-    printf("set up semaphores\n");
-
     pthread_t tid[NUMBER];
     for (size_t i = 0; i < NUMBER; i++)
     {
@@ -95,15 +92,11 @@ int main(int argc, char const *argv[])
         pthread_create(&tid[i], NULL, philosopher, &(thread_id[i]));
     }
 
-    printf("Created threads\n");
-
     for (size_t i = 0; i < NUMBER; i++)
     {
-        printf("Joining threads\n");
         pthread_join(tid[i], NULL);
     }
 
-    printf("Joined threads\n");
 
     // delete semaphores
     for (size_t i = 0; i < NUMBER; i++)
@@ -111,27 +104,22 @@ int main(int argc, char const *argv[])
         sem_destroy(&sem_vars[NUMBER]);
     }
 
-    printf("Destroyed semaphores\n");
 
+    pthread_mutex_destroy(&mutex_rand);
     pthread_mutex_destroy(&mutex_lock);
-
-    printf("Destroyed mutex\n");
 
     return 0;
 }
 
 void *philosopher(void *param) {
-    printf("Entered philosopher\n");
     int threadNum = (*(int*)param);
     int bitesTaken = 0;
     state[threadNum] = THINKING;
 
     while (bitesTaken < 5) {
         sleep(get_next_number());
-        // sleep(10);
         pickup_chopsticks(threadNum);
         sleep(get_next_number());
-        // sleep(10);
         return_chopsticks(threadNum);
         bitesTaken++; 
     }
@@ -164,5 +152,12 @@ void test(int i){
 }
 
 int get_next_number() {
-    return rand_numbers[rand_position++];
+
+    // printf("rand_position before: %d\n", rand_position);
+    pthread_mutex_lock(&mutex_rand);
+    rand_position = rand_position + 1;
+    pthread_mutex_unlock(&mutex_rand);
+    // printf("rand_position after: %d\n", rand_position);
+
+    return rand_numbers[rand_position];
 }
