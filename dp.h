@@ -1,3 +1,14 @@
+/*
+  Author:  John Bauer, Christopher Kobulnicky
+  Course:  COMP 340, Operating Systems
+  Date:    4 April 2025
+  Description:   This header file contains the variables and headers needed to simulate the philosopher dining problem
+  Compile with:
+  Run with:      
+
+*/
+
+
 /**
  * Header file for dining philosophers
  */
